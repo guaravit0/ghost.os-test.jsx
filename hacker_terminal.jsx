@@ -33,6 +33,7 @@ const COMMANDS = {
     "┌─────────────────────────────────────────────┐",
     "│            GHOST OS — COMANDOS               │",
     "├─────────────────────────────────────────────┤",
+    "│  run             Inicializa o sistema        │",
     "│  nmap <host>     Escaneia portas             │",
     "│  scan <range>    Varre rede local            │",
     "│  crack <hash>    Tenta quebrar hash MD5      │",
@@ -251,6 +252,7 @@ function processCommand(input) {
   const arg = parts[1];
 
   switch (cmd) {
+    case "run": return ["[!] Sistema já inicializado."];
     case "help": return COMMANDS.help();
     case "whoami": return COMMANDS.whoami();
     case "ifconfig": return COMMANDS.ifconfig();
@@ -285,6 +287,7 @@ export default function HackerTerminal() {
   const [lines, setLines] = useState([]);
   const [input, setInput] = useState("");
   const [booted, setBooted] = useState(false);
+  const [booting, setBooting] = useState(false);
   const [history, setHistory] = useState([]);
   const [histIdx, setHistIdx] = useState(-1);
   const [matrix, setMatrix] = useState(false);
@@ -293,8 +296,28 @@ export default function HackerTerminal() {
   const inputRef = useRef(null);
   const matrixRef = useRef(null);
 
-  // Boot sequence
+  // Initial prompt
   useEffect(() => {
+    setLines([
+      { text: "", type: "boot" },
+      { text: "  ██████╗ ██╗  ██╗ ██████╗ ███████╗████████╗", type: "boot" },
+      { text: " ██╔════╝ ██║  ██║██╔═══██╗██╔════╝╚══██╔══╝", type: "boot" },
+      { text: " ██║  ███╗███████║██║   ██║███████╗   ██║   ", type: "boot" },
+      { text: " ██║   ██║██╔══██║██║   ██║╚════██║   ██║   ", type: "boot" },
+      { text: " ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║   ", type: "boot" },
+      { text: "  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝   ", type: "boot" },
+      { text: "", type: "boot" },
+      { text: "  GHOST TERMINAL v2.0", type: "boot" },
+      { text: "  Digite 'run' para iniciar o sistema.", type: "boot" },
+      { text: "", type: "boot" },
+    ]);
+  }, []);
+
+  // Boot sequence
+  const startBoot = useCallback(() => {
+    if (booting || booted) return;
+    setBooting(true);
+    setLines([]);
     let timers = [];
     BOOT_SEQUENCE.forEach(({ text, delay }) => {
       timers.push(
@@ -306,19 +329,20 @@ export default function HackerTerminal() {
     timers.push(
       setTimeout(() => {
         setBooted(true);
+        setBooting(false);
         setLines((prev) => [...prev, { text: "", type: "boot" }]);
       }, 3500)
     );
     return () => timers.forEach(clearTimeout);
-  }, []);
+  }, [booting, booted]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lines]);
 
   useEffect(() => {
-    if (booted) inputRef.current?.focus();
-  }, [booted]);
+    inputRef.current?.focus();
+  }, [booted, booting]);
 
   // Matrix rain
   useEffect(() => {
@@ -351,8 +375,18 @@ export default function HackerTerminal() {
   }, [matrix]);
 
   const submit = useCallback(() => {
-    if (!booted) return;
     const cmd = input.trim();
+
+    // Handle 'run' command before boot
+    if (cmd === "run" && !booted && !booting) {
+      setLines((prev) => [...prev, { text: `ghost@phantom:~$ run`, type: "cmd" }, { text: "[*] Inicializando sistema...", type: "output" }]);
+      setInput("");
+      startBoot();
+      return;
+    }
+
+    if (!booted || booting) return;
+
     const prompt = `ghost@phantom:~$ ${cmd}`;
     const result = processCommand(cmd);
 
@@ -379,7 +413,7 @@ export default function HackerTerminal() {
     setInput("");
     if (cmd) setHistory((h) => [cmd, ...h]);
     setHistIdx(-1);
-  }, [input, booted]);
+  }, [input, booted, booting, startBoot]);
 
   const onKeyDown = (e) => {
     if (e.key === "Enter") { submit(); return; }
@@ -488,18 +522,18 @@ export default function HackerTerminal() {
         {lines.map(renderLine)}
 
         {/* Input line */}
-        {booted && !matrix && (
+        {!matrix && (
           <div style={{ display: "flex", alignItems: "center", marginTop: "2px" }}>
             <span
               style={{
-                color: "#00ff41",
+                color: booted ? "#00ff41" : "#888",
                 fontFamily: FONT,
                 fontSize: "13px",
                 whiteSpace: "pre",
-                textShadow: "0 0 6px #00ff41",
+                textShadow: booted ? "0 0 6px #00ff41" : "none",
               }}
             >
-              ghost@phantom:~${" "}
+              {booted ? "ghost@phantom:~$ " : "ghost@terminal:~$ "}
             </span>
             <input
               ref={inputRef}
@@ -510,15 +544,17 @@ export default function HackerTerminal() {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#00ff41",
+                color: booted ? "#00ff41" : "#888",
                 fontFamily: FONT,
                 fontSize: "13px",
-                caretColor: "#00ff41",
+                caretColor: booted ? "#00ff41" : "#888",
                 flex: 1,
-                textShadow: "0 0 6px #00ff41",
+                textShadow: booted ? "0 0 6px #00ff41" : "none",
+                opacity: booting ? 0.5 : 1,
               }}
               autoComplete="off"
               spellCheck={false}
+              disabled={booting}
             />
           </div>
         )}
